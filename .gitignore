@@ -1,0 +1,25 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Packaged tarball (npm pack / local installs)
+*.tgz
+
+# Test / coverage
+coverage/
+
+# Environment (API keys, local overrides)
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+*.log
+
+# TypeScript
+*.tsbuildinfo
+
+# Vitest
+.vitest/
