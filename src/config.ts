@@ -40,13 +40,21 @@ function defaultEnvironment(): Environment {
  */
 export function resolveConfig(
   userConfig: Partial<GovernXOneConfig>,
-  options: { requireApiKey?: boolean } = {},
+  options: { requireApiKey?: boolean; requireProjectId?: boolean } = {},
 ): GovernXOneConfig {
   const requireApiKey = options.requireApiKey !== false;
+  const requireProjectId = options.requireProjectId !== false;
   const apiKey = userConfig.apiKey ?? env('GOVERNXONE_API_KEY');
   if (!apiKey && requireApiKey) {
     throw new Error(
       'GovernXOne SDK: "apiKey" is required. Set GOVERNXONE_API_KEY or pass apiKey to GovernXOne.init().',
+    );
+  }
+
+  const projectId = userConfig.projectId ?? env('GOVERNXONE_PROJECT_ID');
+  if (!projectId && requireProjectId) {
+    throw new Error(
+      'GovernXOne SDK: "projectId" is required. Set GOVERNXONE_PROJECT_ID or pass projectId to GovernXOne.init().',
     );
   }
 
@@ -67,6 +75,7 @@ export function resolveConfig(
     ...DEFAULTS,
     ...userConfig,
     apiKey: apiKey ?? '',
+    projectId: projectId ?? '',
     baseUrl,
     environment,
     serverless,

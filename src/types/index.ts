@@ -57,6 +57,11 @@ export interface MonitoringResponse {
 export interface GovernXOneConfig {
   /** Your GovernXOne API key (plaintext, from the dashboard). Falls back to GOVERNXONE_API_KEY. */
   apiKey?: string;
+  /**
+   * GovernXOne project (AI system) ID to scope monitoring records.
+   * Falls back to GOVERNXONE_PROJECT_ID.
+   */
+  projectId?: string;
   /** Base URL for the GovernXOne ingestion endpoint. */
   baseUrl?: string;
   /** Deployment environment tag. Default: 'production'. */

@@ -30,12 +30,17 @@ describe('utils', () => {
 
 describe('config', () => {
   it('throws without apiKey', () => {
-    expect(() => resolveConfig({})).toThrow(/apiKey/);
+    expect(() => resolveConfig({ projectId: 'proj_123' })).toThrow(/apiKey/);
+  });
+
+  it('throws without projectId', () => {
+    expect(() => resolveConfig({ apiKey: 'gxo_test' })).toThrow(/projectId/);
   });
 
   it('merges defaults', () => {
-    const cfg = resolveConfig({ apiKey: 'gxo_test' });
+    const cfg = resolveConfig({ apiKey: 'gxo_test', projectId: 'proj_123' });
     expect(cfg.apiKey).toBe('gxo_test');
+    expect(cfg.projectId).toBe('proj_123');
     expect(cfg.maxRetries).toBe(5);
     expect(cfg.batchSize).toBe(100);
   });
@@ -43,7 +48,7 @@ describe('config', () => {
   it('defaults to localhost in development', () => {
     const prev = process.env.NODE_ENV;
     process.env.NODE_ENV = 'development';
-    const cfg = resolveConfig({ apiKey: 'gxo_test' });
+    const cfg = resolveConfig({ apiKey: 'gxo_test', projectId: 'proj_123' });
     expect(cfg.baseUrl).toBe('http://localhost:8000');
     process.env.NODE_ENV = prev;
   });
@@ -70,7 +75,11 @@ describe('GovernXOneClient', () => {
   });
 
   it('track enqueues and returns id', () => {
-    const client = new GovernXOneClient({ apiKey: 'gxo_test', flushIntervalMs: 60_000 });
+    const client = new GovernXOneClient({
+      apiKey: 'gxo_test',
+      projectId: 'proj_123',
+      flushIntervalMs: 60_000,
+    });
     const id = client.track({
       provider: 'openai',
       model: 'gpt-4',
@@ -84,7 +93,11 @@ describe('GovernXOneClient', () => {
   });
 
   it('flush delivers batch to sdk endpoint', async () => {
-    const client = new GovernXOneClient({ apiKey: 'gxo_test', flushIntervalMs: 60_000 });
+    const client = new GovernXOneClient({
+      apiKey: 'gxo_test',
+      projectId: 'proj_123',
+      flushIntervalMs: 60_000,
+    });
     client.track({
       provider: 'openai',
       model: 'gpt-4',
@@ -97,7 +110,10 @@ describe('GovernXOneClient', () => {
     await client.flush();
     expect(global.fetch).toHaveBeenCalledWith(
       expect.stringContaining('/api/v1/sdk/monitoring'),
-      expect.objectContaining({ method: 'POST' }),
+      expect.objectContaining({
+        method: 'POST',
+        body: expect.stringContaining('"projectId":"proj_123"'),
+      }),
     );
     await client.shutdown();
   });
@@ -109,6 +125,7 @@ describe('GovernXOne', () => {
   beforeEach(() => {
     GovernXOne._client = null;
     delete process.env.GOVERNXONE_API_KEY;
+    delete process.env.GOVERNXONE_PROJECT_ID;
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ success: true, count: 1 }),
@@ -125,8 +142,14 @@ describe('GovernXOne', () => {
     expect(GovernXOne.ensureInit()).toBeNull();
   });
 
+  it('ensureInit returns null without project id', () => {
+    process.env.GOVERNXONE_API_KEY = 'gxo_test';
+    expect(GovernXOne.ensureInit()).toBeNull();
+  });
+
   it('ensureInit is idempotent', () => {
     process.env.GOVERNXONE_API_KEY = 'gxo_test';
+    process.env.GOVERNXONE_PROJECT_ID = 'proj_123';
     const a = GovernXOne.ensureInit({ flushIntervalMs: 60_000 });
     const b = GovernXOne.ensureInit();
     expect(a).toBe(b);

@@ -35,17 +35,18 @@ const { default: OpenAI } = loadProvider<typeof import('openai')>('openai');
 
 `loadProvider()` does two things:
 
-1. Calls `GovernXOne.ensureInit()` — reads `GOVERNXONE_API_KEY` (and other env vars), registers auto-instrumentation hooks.
+1. Calls `GovernXOne.ensureInit()` — reads `GOVERNXONE_API_KEY`, `GOVERNXONE_PROJECT_ID` (and other env vars), registers auto-instrumentation hooks.
 2. `require()`s the provider package — your app gets the same exports you would from a normal import.
 
 After that, use the provider exactly as you normally would. Prompts, responses, token usage, latency, and errors are captured automatically.
 
 ## Setup
 
-Set your API key (create one in the GovernXOne dashboard under **SDK Monitoring**):
+Set your API key and project ID (create an API key in the GovernXOne dashboard under **SDK Monitoring**; use the AI system ID from your project):
 
 ```bash
 GOVERNXONE_API_KEY=gxo_live_...
+GOVERNXONE_PROJECT_ID=abc12345
 GOVERNXONE_ENDPOINT=https://governxone.com
 GOVERNXONE_ENVIRONMENT=production                # optional
 ```
@@ -65,6 +66,7 @@ import { GovernXOne } from '@governxone/ai-monitor';
 
 GovernXOne.init({
   apiKey: process.env.GOVERNXONE_API_KEY,
+  projectId: process.env.GOVERNXONE_PROJECT_ID,
 });
 ```
 
@@ -275,6 +277,7 @@ console.log(text);
 | Variable | Description |
 |----------|-------------|
 | `GOVERNXONE_API_KEY` | Your organization API key (required for monitoring) |
+| `GOVERNXONE_PROJECT_ID` | GovernXOne project (AI system) ID — scopes monitoring to that project (required) |
 | `GOVERNXONE_ENDPOINT` | API host only (production: `https://governxone.com`) — SDK appends `/api/v1/sdk/monitoring` |
 | `GOVERNXONE_ENVIRONMENT` | `production`, `staging`, or `development` (default: matches `NODE_ENV`) |
 | `GOVERNXONE_DEBUG` | Set to `true` for verbose SDK logs |
@@ -344,7 +347,7 @@ Initialize the singleton client and register auto-instrumentation. Optional when
 
 ### `GovernXOne.ensureInit(config?)`
 
-Like `init()` but no-ops with a warning when `GOVERNXONE_API_KEY` is missing.
+Like `init()` but no-ops with a warning when `GOVERNXONE_API_KEY` or `GOVERNXONE_PROJECT_ID` is missing.
 
 ### `GovernXOne.flush()` / `GovernXOne.shutdown()`
 

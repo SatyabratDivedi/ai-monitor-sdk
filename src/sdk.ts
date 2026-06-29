@@ -38,12 +38,11 @@ export const GovernXOne = {
     }
 
     try {
-      resolveConfig(config, { requireApiKey: true });
-    } catch {
-      warnOnce(
-        'missing-api-key',
-        '[governxone] GOVERNXONE_API_KEY not set — monitoring disabled',
-      );
+      resolveConfig(config, { requireApiKey: true, requireProjectId: true });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : 'GOVERNXONE_API_KEY or GOVERNXONE_PROJECT_ID not set';
+      warnOnce('missing-config', `[governxone] ${message} — monitoring disabled`);
       return null;
     }
 

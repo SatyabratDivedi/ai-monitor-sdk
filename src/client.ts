@@ -34,7 +34,10 @@ export class GovernXOneClient extends EventEmitter {
         void this.flush();
       });
     }
-    this.logger.info('GovernXOne client initialised', { environment: this.config.environment });
+    this.logger.info('GovernXOne client initialised', {
+      environment: this.config.environment,
+      projectId: this.config.projectId,
+    });
   }
 
   /**
@@ -161,7 +164,7 @@ export class GovernXOneClient extends EventEmitter {
           Authorization: `Bearer ${this.config.apiKey}`,
           'User-Agent': this.agent,
         },
-        body: JSON.stringify({ payloads: batch }),
+        body: JSON.stringify({ projectId: this.config.projectId, payloads: batch }),
       });
 
       if (!res.ok) {

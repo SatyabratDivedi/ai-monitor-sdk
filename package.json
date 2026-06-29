@@ -1,8 +1,11 @@
 {
   "name": "@governxone/ai-monitor",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "AI Monitoring SDK for GovernXOne — automatically intercepts AI provider calls, tracks usage, and sends telemetry without application code changes.",
   "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -40,12 +43,24 @@
     "@vercel/ai": "^1.0.0"
   },
   "peerDependenciesMeta": {
-    "openai": { "optional": true },
-    "@anthropic-ai/sdk": { "optional": true },
-    "@google/generative-ai": { "optional": true },
-    "langchain": { "optional": true },
-    "ai": { "optional": true },
-    "@vercel/ai": { "optional": true }
+    "openai": {
+      "optional": true
+    },
+    "@anthropic-ai/sdk": {
+      "optional": true
+    },
+    "@google/generative-ai": {
+      "optional": true
+    },
+    "langchain": {
+      "optional": true
+    },
+    "ai": {
+      "optional": true
+    },
+    "@vercel/ai": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "typescript": "^5.3.0",
