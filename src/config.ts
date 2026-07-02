@@ -12,6 +12,10 @@ const DEFAULTS = {
   debug: false,
   autoInstrument: true,
   serverless: false,
+  sampleRate: 100,
+  remoteSampling: true,
+  sampleConfigRefreshMs: 60_000,
+  clientSampling: false,
 };
 
 function env(key: string): string | undefined {
@@ -33,6 +37,15 @@ function defaultEnvironment(): Environment {
     return 'development';
   }
   return DEFAULTS.environment;
+}
+
+/** Clamp a sampling rate to an integer in the range [0, 100]. */
+export function normalizeSampleRate(value: unknown): number {
+  const num = Number(value);
+  if (!Number.isFinite(num)) {
+    return 100;
+  }
+  return Math.max(0, Math.min(100, Math.round(num)));
 }
 
 /**
@@ -71,6 +84,16 @@ export function resolveConfig(
     userConfig.flushIntervalMs ??
     (serverless ? 2_000 : DEFAULTS.flushIntervalMs);
 
+  const envSampleRate = env('GOVERNXONE_SAMPLE_RATE');
+  const sampleRate = normalizeSampleRate(
+    userConfig.sampleRate ??
+      (envSampleRate !== undefined ? Number(envSampleRate) : DEFAULTS.sampleRate),
+  );
+  const remoteSampling =
+    userConfig.remoteSampling ??
+    (env('GOVERNXONE_REMOTE_SAMPLING') === 'false' ? false : DEFAULTS.remoteSampling);
+  const clientSampling = false;
+
   return {
     ...DEFAULTS,
     ...userConfig,
@@ -81,6 +104,9 @@ export function resolveConfig(
     serverless,
     debug,
     flushIntervalMs,
+    sampleRate,
+    remoteSampling,
+    clientSampling,
   };
 }
 

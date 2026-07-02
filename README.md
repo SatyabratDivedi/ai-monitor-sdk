@@ -282,6 +282,29 @@ console.log(text);
 | `GOVERNXONE_ENVIRONMENT` | `production`, `staging`, or `development` (default: matches `NODE_ENV`) |
 | `GOVERNXONE_DEBUG` | Set to `true` for verbose SDK logs |
 | `GOVERNXONE_SERVERLESS` | Set to `true` to force serverless flush mode (auto-detected on Vercel, Lambda, Netlify) |
+| `GOVERNXONE_SAMPLE_RATE` | Percentage `0`–`100` of responses to store (default `100`). Overridden by the project's dashboard setting unless remote sampling is disabled |
+| `GOVERNXONE_REMOTE_SAMPLING` | Set to `false` to ignore the dashboard sampling rate and use the local value only |
+| `GOVERNXONE_CLIENT_SAMPLING` | `true`/`false` to force client-side dropping on/off (default: on for long-running servers, off in serverless where the backend samples) |
+
+## Data collection sampling
+
+You can capture only a percentage of AI responses instead of all of them — useful
+for cost control and high-volume workloads. Set the rate **per project** from the
+GovernXOne dashboard (SDK Monitoring → Settings) or locally via `sampleRate`.
+
+```ts
+GovernXOne.init({ sampleRate: 30 }); // store ~3 of every 10 responses
+```
+
+Client-side sampling is probabilistic: each call is kept independently with a
+`sampleRate / 100` chance. This is stateless so it works correctly in serverless
+and per-request environments (where in-memory state resets on every invocation).
+The dashboard value is fetched at startup and refreshed periodically, so changing
+it takes effect without redeploying. On long-running servers the SDK drops
+non-sampled calls client-side (saving bandwidth) and marks kept records so the
+backend does not re-sample them; in serverless environments the backend applies
+sampling authoritatively via a database-persisted token bucket that enforces the
+exact rate.
 
 ## Next.js
 

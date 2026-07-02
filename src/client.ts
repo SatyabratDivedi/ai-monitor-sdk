@@ -1,6 +1,6 @@
 import EventEmitter from 'events';
 import { MonitoringPayload, MonitoringResponse, GovernXOneConfig, Logger, TrackPayload } from './types';
-import { resolveConfig, createDefaultLogger } from './config';
+import { resolveConfig, createDefaultLogger, normalizeSampleRate } from './config';
 import { generateId, nowISO, backoffDelay } from './utils';
 
 /**
@@ -12,13 +12,17 @@ export class GovernXOneClient extends EventEmitter {
   private readonly queue: MonitoringPayload[] = [];
   private flushTimer: ReturnType<typeof setInterval> | null = null;
   private flushDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private sampleConfigTimer: ReturnType<typeof setInterval> | null = null;
   private flushing = false;
   private readonly agent: string;
+  /** Effective sampling rate (0-100). Kept in sync with the remote config. */
+  private sampleRate: number;
 
   constructor(userConfig: Partial<GovernXOneConfig>) {
     super();
     this.config = resolveConfig(userConfig) as Required<GovernXOneConfig>;
     this.logger = this.config.logger ?? createDefaultLogger(this.config.debug);
+    this.sampleRate = normalizeSampleRate(this.config.sampleRate);
 
     this.agent = [
       `governxone-ai-monitor`,
@@ -29,6 +33,9 @@ export class GovernXOneClient extends EventEmitter {
       .join('/');
 
     this.startFlushLoop();
+    if (this.config.remoteSampling) {
+      this.startSampleConfigLoop();
+    }
     if (this.config.serverless && typeof process !== 'undefined') {
       process.once('beforeExit', () => {
         void this.flush();
@@ -37,7 +44,36 @@ export class GovernXOneClient extends EventEmitter {
     this.logger.info('GovernXOne client initialised', {
       environment: this.config.environment,
       projectId: this.config.projectId,
+      sampleRate: this.sampleRate,
     });
+  }
+
+  /**
+   * Stateless probabilistic (head) sampling decision. Each record is kept
+   * independently with probability `sampleRate / 100`.
+   *
+   * This intentionally does NOT use a stateful token-bucket accumulator: the
+   * SDK commonly runs in serverless / per-request environments where in-memory
+   * state is reset on every invocation, which would make a bucket either drop
+   * everything (rate never accumulates to 100) or behave non-deterministically.
+   * Exact, deterministic rate enforcement is handled server-side where the
+   * accumulator is persisted in the database.
+   */
+  private shouldSample(): boolean {
+    const rate = this.sampleRate;
+    if (rate >= 100) return true;
+    if (rate <= 0) return false;
+    return Math.random() * 100 < rate;
+  }
+
+  /** Current effective sampling rate (0-100). */
+  getSampleRate(): number {
+    return this.sampleRate;
+  }
+
+  /** Override the sampling rate at runtime. */
+  setSampleRate(rate: number): void {
+    this.sampleRate = normalizeSampleRate(rate);
   }
 
   /**
@@ -45,6 +81,18 @@ export class GovernXOneClient extends EventEmitter {
    * Returns the generated payload id so callers can correlate responses.
    */
   track(partial: TrackPayload): string {
+    const id = generateId();
+    const clientSampling = this.config.clientSampling;
+
+    if (clientSampling && !this.shouldSample()) {
+      this.logger.debug('Payload dropped by client-side sampling', {
+        id,
+        sampleRate: this.sampleRate,
+      });
+      this.emit('sampled-out', { id });
+      return id;
+    }
+
     const metadata = { ...(partial.metadata ?? {}) };
     if (partial.sessionId) metadata.sessionId = partial.sessionId;
     if (partial.userId) metadata.userId = partial.userId;
@@ -57,8 +105,9 @@ export class GovernXOneClient extends EventEmitter {
       totalTokens?: number;
       estimatedCost?: number;
     } = {
-      id: generateId(),
+      id,
       timestamp: nowISO(),
+      sampled: clientSampling,
       environment: this.config.environment,
       provider: partial.provider,
       model: partial.model,
@@ -117,6 +166,55 @@ export class GovernXOneClient extends EventEmitter {
     if (this.flushDebounceTimer) {
       clearTimeout(this.flushDebounceTimer);
       this.flushDebounceTimer = null;
+    }
+    if (this.sampleConfigTimer) {
+      clearInterval(this.sampleConfigTimer);
+      this.sampleConfigTimer = null;
+    }
+  }
+
+  private startSampleConfigLoop(): void {
+    void this.refreshSampleConfig();
+    this.sampleConfigTimer = setInterval(
+      () => void this.refreshSampleConfig(),
+      this.config.sampleConfigRefreshMs,
+    );
+    if (this.sampleConfigTimer.unref) this.sampleConfigTimer.unref();
+  }
+
+  /**
+   * Fetch the project's sampling rate from the GovernXOne dashboard and apply
+   * it. Failures are non-fatal — the current (or default) rate is retained.
+   */
+  private async refreshSampleConfig(): Promise<void> {
+    if (!this.config.apiKey || !this.config.projectId) return;
+    const base = this.config.baseUrl.replace(/\/$/, '');
+    const url = `${base}/api/v1/sdk/config?projectId=${encodeURIComponent(this.config.projectId)}`;
+    try {
+      const res = await fetch(url, {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${this.config.apiKey}`,
+          'User-Agent': this.agent,
+        },
+      });
+      if (!res.ok) {
+        this.logger.debug('Sampling config fetch failed', { status: res.status });
+        return;
+      }
+      const data = (await res.json()) as { sampleRate?: number };
+      if (typeof data.sampleRate === 'number') {
+        const next = normalizeSampleRate(data.sampleRate);
+        if (next !== this.sampleRate) {
+          this.logger.info('Sampling rate updated from remote config', {
+            from: this.sampleRate,
+            to: next,
+          });
+          this.sampleRate = next;
+        }
+      }
+    } catch (err) {
+      this.logger.debug('Sampling config fetch error', err);
     }
   }
 

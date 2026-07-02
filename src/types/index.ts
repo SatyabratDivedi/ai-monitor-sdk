@@ -44,6 +44,11 @@ export interface MonitoringPayload {
   timestamp: string;
   /** Arbitrary metadata (userId, sessionId, etc.). */
   metadata?: Record<string, unknown>;
+  /**
+   * Set by the SDK when it has already applied client-side sampling to this
+   * record. The backend trusts this flag and will not re-sample the record.
+   */
+  sampled?: boolean;
 }
 
 /** Response from the monitoring API. */
@@ -86,6 +91,30 @@ export interface GovernXOneConfig {
   logger?: Logger;
   /** Auto-instrument supported providers globally. Default: true. */
   autoInstrument?: boolean;
+  /**
+   * Percentage (0-100) of tracked calls to persist. 100 keeps everything
+   * (default), 30 keeps ~3 of every 10, 0 keeps nothing. When set, the SDK
+   * drops non-sampled calls client-side (probabilistically) to save bandwidth.
+   * Overridden by the project's remote sampling config unless `remoteSampling`
+   * is false.
+   */
+  sampleRate?: number;
+  /**
+   * Fetch the sampling rate configured for this project from the GovernXOne
+   * dashboard and keep it in sync. Default: true. When enabled the remote rate
+   * takes precedence over the local `sampleRate` value.
+   */
+  remoteSampling?: boolean;
+  /** Interval (ms) between remote sampling-config refreshes. Default: 60000. */
+  sampleConfigRefreshMs?: number;
+  /**
+   * Drop non-sampled calls in the SDK (client-side) instead of sending them
+   * for the backend to sample. Saves bandwidth on long-running servers.
+   * Defaults to `true` on long-running processes and `false` in serverless
+   * environments (where the backend samples authoritatively, since each
+   * invocation starts with a fresh accumulator).
+   */
+  clientSampling?: boolean;
   /**
    * Serverless mode — flush after each tracked call and on process exit.
    * Auto-detected on Vercel, AWS Lambda, Netlify, etc. Set GOVERNXONE_SERVERLESS=true to force.
