@@ -1,6 +1,6 @@
 {
   "name": "@governxone/ai-monitor",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "AI Monitoring SDK for GovernXOne — automatically intercepts AI provider calls, tracks usage, and sends telemetry without application code changes.",
   "private": false,
   "publishConfig": {

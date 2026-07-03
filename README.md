@@ -19,6 +19,8 @@ npm install @langchain/openai
 npm install ai
 ```
 
+> **Using Next.js?** You must configure `serverExternalPackages` in `next.config.ts` before using `loadProvider()`. See [Next.js setup](#nextjs-setup).
+
 ## How monitoring works
 
 GovernXOne patches AI provider SDKs at runtime. For patches to apply **before** the provider module loads, you must load providers through `loadProvider()` instead of a top-level `import`.
@@ -70,7 +72,7 @@ GovernXOne.init({
 });
 ```
 
-### Side-effect register (Next.js / early bootstrap)
+### Side-effect register (optional early bootstrap)
 
 Import this once at the top of your server entry so instrumentation is ready before any route handlers run:
 
@@ -79,6 +81,8 @@ import '@governxone/ai-monitor/register';
 ```
 
 You still need `loadProvider()` for each AI SDK package — `register` only initializes the monitor.
+
+> **Next.js users:** You must also configure `next.config.ts` — see [Next.js setup](#nextjs-setup) below.
 
 ---
 
@@ -306,27 +310,74 @@ backend does not re-sample them; in serverless environments the backend applies
 sampling authoritatively via a database-persisted token bucket that enforces the
 exact rate.
 
-## Next.js
+## Next.js setup
 
-Add to `next.config.ts`:
+Next.js (especially with Turbopack) bundles server code. Without configuration, `loadProvider()` can fail at runtime with:
 
-```ts
-const nextConfig = {
-  serverExternalPackages: ['@governxone/ai-monitor'],
-};
+```text
+Error: Cannot find module as expression is too dynamic
 ```
 
-Use `loadProvider()` in **server-only** modules (API routes, Server Actions, `lib/` helpers). Never call it from Client Components — monitoring runs on the server only.
+This happens when the SDK and your AI provider packages are bundled instead of loaded as native Node modules. **You must add `serverExternalPackages` in `next.config.ts`** — include `@governxone/ai-monitor` and every AI provider package you load through `loadProvider()`.
 
-For App Router projects, add the register import in `instrumentation.ts`:
+### 1. Configure `next.config.ts` (required)
 
 ```ts
+import type { NextConfig } from 'next';
+
+const nextConfig: NextConfig = {
+  serverExternalPackages: [
+    '@governxone/ai-monitor',
+    // Add each provider package you use with loadProvider():
+    '@google/generative-ai',
+    'openai',
+    '@anthropic-ai/sdk',
+    '@langchain/openai',
+    'ai',
+  ],
+};
+
+export default nextConfig;
+```
+
+Only list the packages you actually install. For example, if you use Gemini only:
+
+```ts
+serverExternalPackages: ['@governxone/ai-monitor', '@google/generative-ai'],
+```
+
+Restart the dev server after changing `next.config.ts`.
+
+### 2. Use `loadProvider()` in server-only code
+
+Call `loadProvider()` in **server-only** modules (API routes, Server Actions, `lib/` helpers). Never call it from Client Components — monitoring runs on the server only.
+
+Example (`lib/gemini.ts`):
+
+```ts
+import { loadProvider } from '@governxone/ai-monitor';
+
+const { GoogleGenerativeAI } = loadProvider<typeof import('@google/generative-ai')>(
+  '@google/generative-ai',
+);
+
+export const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+```
+
+### 3. Optional: early bootstrap via `instrumentation.ts`
+
+For App Router projects, you can import the register hook so instrumentation initializes before route handlers:
+
+```ts
+// instrumentation.ts
 export async function register() {
   if (process.env.NEXT_RUNTIME === 'nodejs') {
     await import('@governxone/ai-monitor/register');
   }
 }
 ```
+
+You still need `loadProvider()` for each AI SDK package — `register` only initializes the monitor.
 
 ## Supported providers
 
@@ -363,6 +414,10 @@ GovernXOne backend → Dashboard
 ### `loadProvider<T>(packageName: string): T`
 
 Initialize monitoring (if configured), then load an AI provider package. **Always use this instead of a top-level `import`** for supported providers.
+
+Supported `packageName` values: `'openai'`, `'@anthropic-ai/sdk'`, `'@google/generative-ai'`, `'@langchain/openai'`, `'langchain/chat_models/openai'`, `'langchain'`, `'ai'`, `'@vercel/ai'`.
+
+In **Next.js**, also add the monitor and provider packages to `serverExternalPackages` in `next.config.ts` (see [Next.js setup](#nextjs-setup)).
 
 ### `GovernXOne.init(config?)`
 
